@@ -31,7 +31,7 @@ async def log_state_change(data: Tuple[GeAppliance, Dict[ErdCodeType, Any]]):
         _LOGGER.info(f'Door Change: {door_status}')
         freezer_status = door_status.freezer
         _LOGGER.info(f'Freezer status: {freezer_status}')
-    
+
 async def detect_appliance_type(appliance: GeAppliance):
     """
     Detect the appliance type.
@@ -39,25 +39,31 @@ async def detect_appliance_type(appliance: GeAppliance):
     """
     _LOGGER.info(f'Appliance state change detected in {appliance}')
 
-
 # async def do_periodic_update(appliance: GeAppliance):
 #     """Request a full state update every minute forever"""
-#     _LOGGER.debug(f'Registering update callback for {appliance:s}')
+#     _LOGGER.debug(f'Registering update callback for {appliance}')
 #     while True:
 #         await asyncio.sleep(60 * 1)
-#         _LOGGER.debug(f'Requesting update for {appliance:s}')
+#         _LOGGER.debug(f'Requesting update for {appliance}')
 #         await appliance.async_request_update()
 
+async def main():
+    while True:
+        try:
+            loop = asyncio.get_running_loop()
+            client = GeWebsocketClient(USERNAME, PASSWORD, REGION, loop)
+            client.add_event_handler(EVENT_APPLIANCE_INITIAL_UPDATE, detect_appliance_type)
+            client.add_event_handler(EVENT_APPLIANCE_STATE_CHANGE, log_state_change)
+            # client.add_event_handler(EVENT_ADD_APPLIANCE, do_periodic_update)
+        
+            async with aiohttp.ClientSession() as session:
+                await client.async_get_credentials_and_run(session)
+                await asyncio.sleep(7400)
+        except Exception as e:
+            _LOGGER.error(f"An exception occurred in main: {e}")
+            await asyncio.sleep(10)  # Wait for 10 seconds before restarting
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format='%(asctime)-15s %(levelname)-8s %(message)s')
 
-    loop = asyncio.get_event_loop()
-    client = GeWebsocketClient(USERNAME, PASSWORD, REGION, loop)
-    client.add_event_handler(EVENT_APPLIANCE_INITIAL_UPDATE, detect_appliance_type)
-    client.add_event_handler(EVENT_APPLIANCE_STATE_CHANGE, log_state_change)
-    # client.add_event_handler(EVENT_ADD_APPLIANCE, do_periodic_update)
-
-    session = aiohttp.ClientSession()
-    asyncio.ensure_future(client.async_get_credentials_and_run(session), loop=loop)
-    loop.run_until_complete(asyncio.sleep(7400))
+    asyncio.run(main())
